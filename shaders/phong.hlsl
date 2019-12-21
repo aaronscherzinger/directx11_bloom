@@ -78,6 +78,5 @@ float4 PSMain(VertexOut p) : SV_TARGET
                  + diffuseColor * lambertian * lightPower
                  + specularColor * specular * lightPower;
 
-    // TODO: gamma correction?
     return float4(color, 1.0);
 }

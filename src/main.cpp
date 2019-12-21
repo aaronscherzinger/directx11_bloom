@@ -203,11 +203,11 @@ void UpdateTick(float deltaTime)
     transforms.proj = DirectX::XMMatrixTranspose(DirectX::XMMatrixPerspectiveFovLH(1.5f, static_cast<float>(WIDTH) / static_cast<float>(HEIGHT), 0.01f, 100.f));
 
     // update light source (same as before: since it is constant, we do not need to update it every frame)
-    DirectX::XMVECTOR lightWorldPos = DirectX::XMVectorSet(-1.5f, 1.f, 1.2f, 1.f);
+    DirectX::XMVECTOR lightWorldPos = DirectX::XMVectorSet(-1.5f, 1.5f, 1.5f, 1.f);
     DirectX::XMVECTOR lightViewPos = DirectX::XMVector4Transform(lightWorldPos, transforms.view);
     DirectX::XMStoreFloat4(&lightSource.lightPosition, lightViewPos);
 
-    lightSource.lightColorAndPower = DirectX::XMFLOAT4(1.f, 1.f, 0.7f, 5.f);
+    lightSource.lightColorAndPower = DirectX::XMFLOAT4(1.f, 1.f, 0.7f, 4.5f);
 }
 
 void RenderFrame()
@@ -333,7 +333,7 @@ void RenderFrame()
 
     deviceContext->PSSetSamplers(0, 1, &defaultSamplerState);
 
-    CompositeParams compParams = { 1.5f };
+    CompositeParams compParams = { 0.75f };
     {
         D3D11_MAPPED_SUBRESOURCE ms;
         deviceContext->Map(compositionConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
@@ -378,7 +378,7 @@ void InitRenderData()
         textureDesc.Height = heights[i];
         textureDesc.MipLevels = 1;
         textureDesc.ArraySize = 1;
-        textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         textureDesc.SampleDesc.Count = 1;
         textureDesc.Usage = D3D11_USAGE_DEFAULT;
         textureDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -418,7 +418,7 @@ void InitRenderData()
         }
 
         // 4. Create UAV
-        uavDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
         uavDesc.Texture2D.MipSlice = 0;
 
@@ -684,8 +684,9 @@ void InitRenderData()
 
     // Material and light source
     {
-        lightSource.lightPosition = DirectX::XMFLOAT4(1.5f, 1.5f, 1.2f, 1.f);
-        lightSource.lightColorAndPower = DirectX::XMFLOAT4(1.f, 1.f, 1.f, 5.f);
+        // light values are updated during UpdateTick()
+        lightSource.lightPosition = DirectX::XMFLOAT4(1.f, 1.f, 1.f, 1.f);
+        lightSource.lightColorAndPower = DirectX::XMFLOAT4(1.f, 1.f, 1.f, 1.f);
 
         material.ambient = DirectX::XMFLOAT4(0.f, 0.f, 0.f, 1.f);
         material.diffuse = DirectX::XMFLOAT4(1.f, 1.f, 1.f, 1.f);
@@ -859,12 +860,12 @@ void InitD3D(HWND hWnd)
     DXGI_SWAP_CHAIN_DESC scd;
     ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
 
-    scd.BufferCount = 1;                                    // one back buffer
-    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;     // use 32-bit color
-    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;      // how swap chain is to be used
-    scd.OutputWindow = hWnd;                                // the window to be used
-    scd.SampleDesc.Count = 1;                               // how many multisamples
-    scd.Windowed = TRUE;                                    // windowed/full-screen mode
+    scd.BufferCount = 1;                                        // one back buffer
+    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;    // use SRGB for gamma-corrected output
+    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;          // how swap chain is to be used
+    scd.OutputWindow = hWnd;                                    // the window to be used
+    scd.SampleDesc.Count = 1;                                   // how many multisamples
+    scd.Windowed = TRUE;                                        // windowed/full-screen mode
 
     // create a device, device context and swap chain
     D3D11CreateDeviceAndSwapChain(NULL,
@@ -881,12 +882,20 @@ void InitD3D(HWND hWnd)
         &deviceContext);
 
     // get the address of the back buffer
-    ID3D11Texture2D *pBackBuffer;
+    ID3D11Texture2D *pBackBuffer = nullptr;
     swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
 
-    // use the back buffer address to create the render target
-    device->CreateRenderTargetView(pBackBuffer, nullptr, &backbuffer);
-    pBackBuffer->Release();
+    if (pBackBuffer != nullptr)
+    {
+        // use the back buffer address to create the render target
+        device->CreateRenderTargetView(pBackBuffer, nullptr, &backbuffer);
+        pBackBuffer->Release();
+    }
+    else
+    {
+        std::cerr << "Could not obtain backbuffer from swapchain";
+        exit(-1);
+    }
 
     // build shaders
     ID3DBlob* errorBlob = nullptr;
